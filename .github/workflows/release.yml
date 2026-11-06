@@ -1,0 +1,32 @@
+# Publishes Linux binaries (with .sha256 files) for every v* tag. These are the files
+# the dashboard's self-update downloads from AGENT_UPDATE_URL.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: go vet ./... && go test ./...
+      - name: Build
+        run: |
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            GOOS=linux GOARCH=$arch CGO_ENABLED=0 go build -trimpath -o dist/deploy-agent-linux-$arch ./cmd/deploy-agent
+            (cd dist && sha256sum deploy-agent-linux-$arch > deploy-agent-linux-$arch.sha256)
+          done
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
