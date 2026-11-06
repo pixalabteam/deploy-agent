@@ -1,0 +1,52 @@
+# Example nginx vhost for an app deployed by deploy-agent. Place it at
+# /etc/nginx/sites-available/myapp.conf (symlinked into sites-enabled). This is NOT the
+# file deploy-agent writes (that is upstream.conf.example, included below).
+#
+# deploy-agent only writes/overwrites /etc/nginx/conf.d/myapp-api-upstream.conf (the
+# list of `server 127.0.0.1:PORT` entries of the running instances) and never
+# touches this file.
+
+# Debian/Ubuntu nginx.conf already has `include /etc/nginx/conf.d/*.conf;`, which loads
+# the upstream file automatically. Only add the line below if yours does NOT; adding it
+# when conf.d is auto-included fails with `duplicate upstream "myapp_api"`.
+# include /etc/nginx/conf.d/myapp-api-upstream.conf;
+
+# First setup: that file must define `upstream myapp_api` BEFORE the first deploy,
+# otherwise `nginx -t` fails ("host not found in upstream"), every deploy rolls back and
+# the agent never gets to write the file. Create a placeholder once (see README).
+
+server {
+    listen 443 ssl http2;
+    server_name app.example.com;
+
+    # ssl_certificate / ssl_certificate_key: configure them however you manage
+    # certificates on the host (certbot, etc.); out of scope for deploy-agent.
+
+    location / {
+        proxy_pass http://myapp_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Zero-downtime deploys need a retry on another instance in case nginx sends
+        # a request to a container that was just stopped (a tiny race window between
+        # the agent switching the upstream and stopping the old container).
+        proxy_next_upstream error timeout http_502 http_503 http_504;
+        proxy_connect_timeout 3s;
+    }
+
+    # deploy-agent webhook (CI calls POST /deploy here). Proxy straight to
+    # deploy-agent (default LISTEN_ADDR 127.0.0.1:8080), NOT through the
+    # myapp_api upstream (that is your app, not deploy-agent). Real authentication is
+    # the HMAC (`X-Signature-256`) that deploy-agent verifies itself, not nginx, so no
+    # extra access control is needed here, but change this path if you want to hide it
+    # from automated scanners.
+    location /_deploy-agent/ {
+        proxy_pass http://127.0.0.1:8080/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}

@@ -1,0 +1,35 @@
+{
+  "projects": {
+    "myapp": {
+      "env_file": "/etc/deploy-agent/myapp.env",
+      "services": {
+        "api": {
+          "kind": "http",
+          "container_prefix": "myapp-api",
+          "instance_count": 2,
+          "base_port": 3101,
+          "container_port": 3000,
+          "health_check_path": "/health",
+          "nginx_upstream_name": "myapp_api",
+          "nginx_upstream_path": "/etc/nginx/conf.d/myapp-api-upstream.conf",
+          "sticky_sessions": false,
+          "env": { "PROCESS_TYPE": "api" },
+          "first_instance_env": { "MIGRATE": "true" },
+          "other_instances_env": { "MIGRATE": "false" }
+        },
+        "worker": {
+          "kind": "worker",
+          "container_prefix": "myapp-worker",
+          "env": { "PROCESS_TYPE": "worker", "MIGRATE": "false" }
+        }
+      }
+    },
+    "shop": {
+      "env_file": "/etc/deploy-agent/shop.env",
+      "webhook_secret": "generate with: openssl rand -hex 32",
+      "services": {
+        "web": { "kind": "http", "base_port": 4000, "container_port": 3000, "health_check_path": "/healthz" }
+      }
+    }
+  }
+}

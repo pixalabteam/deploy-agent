@@ -1,0 +1,21 @@
+[Unit]
+Description=deploy-agent
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/deploy-agent/deploy-agent.env
+# Binary lives in a directory owned by the agent user so the admin UI can replace it
+# on self-update; the agent then exits non-zero and Restart=on-failure starts the new one.
+ExecStart=/opt/deploy-agent/deploy-agent
+Restart=on-failure
+RestartSec=3
+# The agent writes nothing besides the state file and the nginx upstream files, so it
+# does not need root, only membership of the docker group to call the `docker` CLI.
+User=deploy-agent
+Group=deploy-agent
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
